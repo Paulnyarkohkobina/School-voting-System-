@@ -1,0 +1,599 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Student council election</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:wght@500;700&family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --navy: #1F2A44; --navy-light: #2E3D63; --cream: #F6F3EA; --paper: #FBF9F3;
+    --red: #A5362A; --red-dark: #7A2820; --gold: #A9832E; --line: #D8D2C0;
+    --ink: #2B2A26; --ink-soft: #6B6759;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; font-family: 'Inter', -apple-system, sans-serif; color: var(--ink); background: var(--cream); min-height: 100vh; }
+  h1, h2, h3 { font-family: 'Fraunces', Georgia, serif; margin: 0; }
+  .mono { font-family: 'IBM Plex Mono', monospace; }
+  button {
+    font-family: inherit; cursor: pointer; border: none; border-radius: 6px;
+    padding: 12px 20px; font-size: 14px; font-weight: 600; transition: transform .08s ease, opacity .15s ease;
+  }
+  button:active { transform: scale(0.98); }
+  button.primary { background: var(--navy); color: var(--paper); }
+  button.primary:hover { background: var(--navy-light); }
+  button.ghost { background: transparent; color: var(--navy); border: 1.5px solid var(--line); }
+  button.ghost:hover { border-color: var(--navy); }
+  button:disabled { opacity: .45; cursor: not-allowed; }
+  input, select, textarea {
+    font-family: inherit; font-size: 14px; padding: 10px 12px; border: 1.5px solid var(--line);
+    border-radius: 6px; background: var(--paper); color: var(--ink); width: 100%;
+  }
+  input:focus, select:focus, textarea:focus { outline: none; border-color: var(--navy); }
+  .card { background: var(--paper); border: 1px solid var(--line); border-radius: 10px; padding: 20px; max-width: 480px; margin: 0 auto 16px; }
+  .topbar { background: var(--navy); color: var(--cream); padding: 18px 24px; display: flex; align-items: center; gap: 12px; }
+  .seal { width: 34px; height: 34px; border-radius: 50%; border: 1.5px solid var(--gold); color: var(--gold); display: flex; align-items: center; justify-content: center; font-family: 'Fraunces', serif; font-size: 15px; flex-shrink: 0; }
+  .eyebrow { font-size: 11px; letter-spacing: .12em; text-transform: uppercase; color: var(--ink-soft); font-weight: 600; }
+  .body-pad { padding: 28px; }
+  .stamp { position: fixed; top: 50%; left: 50%; transform: translate(-50%,-50%) rotate(-10deg) scale(0.6); border: 5px solid var(--red); color: var(--red); font-family: 'Fraunces', serif; font-weight: 700; font-size: 40px; padding: 10px 28px; border-radius: 10px; opacity: 0; pointer-events: none; z-index: 50; background: rgba(251,249,243,0.92); }
+  .stamp.show { animation: stampIn .55s cubic-bezier(.2,1.4,.4,1) forwards; }
+  @keyframes stampIn { 0% { opacity:0; transform: translate(-50%,-50%) rotate(-10deg) scale(0.6);} 60% { opacity:1; transform: translate(-50%,-50%) rotate(-8deg) scale(1.08);} 100% { opacity:1; transform: translate(-50%,-50%) rotate(-8deg) scale(1);} }
+  .bar-row { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
+  .bar-track { flex: 1; height: 22px; background: #EDE9DC; border-radius: 4px; overflow: hidden; }
+  .bar-fill { height: 100%; background: var(--navy); border-radius: 4px; transition: width .4s ease; }
+  .bar-fill.leader { background: var(--red); }
+  .error-box { background: #F7E7E3; border: 1px solid var(--red); color: var(--red-dark); padding: 10px 14px; border-radius: 6px; font-size: 13px; margin-bottom: 14px; max-width: 480px; margin-left: auto; margin-right: auto; }
+  .empty { text-align: center; padding: 40px 20px; color: var(--ink-soft); }
+  .cand-photo { width: 40px; height: 40px; border-radius: 50%; object-fit: cover; flex-shrink: 0; border: 1.5px solid var(--line); background: #EDE9DC; }
+  .cand-photo.sm { width: 28px; height: 28px; }
+  .cand-photo-placeholder { width: 40px; height: 40px; border-radius: 50%; flex-shrink: 0; background: #EDE9DC; border: 1.5px solid var(--line); display: flex; align-items: center; justify-content: center; font-family: 'Fraunces', serif; font-size: 15px; color: var(--ink-soft); }
+  .cand-photo-placeholder.sm { width: 28px; height: 28px; font-size: 12px; }
+  .wide { max-width: 640px; margin: 0 auto; }
+</style>
+</head>
+<body>
+<div id="app-root"></div>
+
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-app.js";
+import {
+  getFirestore, doc, getDoc, setDoc, deleteDoc, collection, getDocs
+} from "https://www.gstatic.com/firebasejs/10.13.0/firebase-firestore.js";
+import {
+  getAuth, signInWithEmailAndPassword, signOut, onAuthStateChanged
+} from "https://www.gstatic.com/firebasejs/10.13.0/firebase-auth.js";
+
+// ------------------------------------------------------------------
+// 1. PASTE YOUR FIREBASE CONFIG HERE (from Firebase console > Project settings)
+// ------------------------------------------------------------------
+const firebaseConfig = {
+  apiKey: "YOUR_API_KEY",
+  authDomain: "YOUR_PROJECT.firebaseapp.com",
+  projectId: "YOUR_PROJECT_ID",
+  storageBucket: "YOUR_PROJECT.appspot.com",
+  messagingSenderId: "YOUR_SENDER_ID",
+  appId: "YOUR_APP_ID"
+};
+
+const app = initializeApp(firebaseConfig);
+const db = getFirestore(app);
+const auth = getAuth(app);
+
+const root = document.getElementById('app-root');
+let state = {
+  view: 'loading', election: null,
+  voterId: '', voterName: '', voterPassword: '', voterAuthenticated: false,
+  selections: {}, alreadyVoted: false, voteError: '', showStamp: false,
+  adminEmail: '', adminPasswordInput: '', adminError: '', adminUser: null,
+  newPosName: '', newCandName: {}, newCandPhoto: {},
+  roster: {}, rosterNewId: '', rosterNewName: '', rosterNewPass: '', rosterError: '', rosterMsg: '',
+  votes: {},
+};
+
+function setState(patch){ state = Object.assign({}, state, patch); render(); }
+
+onAuthStateChanged(auth, (user) => { state.adminUser = user; if (state.view !== 'loading') render(); });
+
+async function hashPassword(pw){
+  const enc = new TextEncoder().encode(pw);
+  const buf = await crypto.subtle.digest('SHA-256', enc);
+  return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2,'0')).join('');
+}
+
+// ---------- data layer ----------
+async function loadElection(){
+  try {
+    const snap = await getDoc(doc(db, 'config', 'election'));
+    state.election = snap.exists() ? snap.data() : null;
+  } catch(e){ state.election = null; }
+  setState({ view: 'landing' });
+}
+async function saveElection(cfg){ await setDoc(doc(db, 'config', 'election'), cfg); }
+
+async function checkVoted(id){
+  try {
+    const snap = await getDoc(doc(db, 'ballots', id));
+    return snap.exists();
+  } catch(e){ return false; }
+}
+
+async function computeTally(){
+  const tally = {};
+  const snap = await getDocs(collection(db, 'ballots'));
+  snap.forEach(d => {
+    const sel = (d.data().selections) || {};
+    for (const posId in sel){
+      const candId = sel[posId];
+      tally[posId] = tally[posId] || {};
+      tally[posId][candId] = (tally[posId][candId] || 0) + 1;
+    }
+  });
+  return tally;
+}
+
+async function loadRosterList(){
+  const roster = {};
+  const snap = await getDocs(collection(db, 'roster'));
+  snap.forEach(d => { roster[d.id] = d.data(); });
+  return roster;
+}
+
+// ---------- voter flow ----------
+async function verifyVoter(){
+  const id = (state.voterId || '').trim().toLowerCase();
+  const pass = (state.voterPassword || '').trim();
+  if (!id || !pass){ setState({ voteError: 'Enter your student ID and password.' }); return; }
+  let entrySnap;
+  try { entrySnap = await getDoc(doc(db, 'roster', id)); }
+  catch(e){ setState({ voteError: 'Could not reach the voter roster. Try again.' }); return; }
+  if (!entrySnap.exists()){ setState({ voteError: "That student ID isn't on the voter roster. Check with your election admin." }); return; }
+  const entry = entrySnap.data();
+  const hash = await hashPassword(pass);
+  if (hash !== entry.passwordHash){ setState({ voteError: 'Incorrect password for that student ID.' }); return; }
+  const already = await checkVoted(id);
+  if (already){ setState({ voteError: 'This student ID has already voted. Each student votes once.' }); return; }
+  setState({ voterAuthenticated: true, voterName: entry.name, voteError: '' });
+}
+
+async function submitVote(){
+  const el = state.election;
+  for (const pos of el.positions){
+    if (!state.selections[pos.id]){ setState({ voteError: 'Pick a candidate for every position before submitting.' }); return; }
+  }
+  const id = state.voterId.trim().toLowerCase();
+  try {
+    await setDoc(doc(db, 'ballots', id), { selections: state.selections, t: Date.now() });
+  } catch(e){
+    setState({ voteError: 'This student ID has already voted, or the vote could not be saved. Try again.' }); return;
+  }
+  setState({ alreadyVoted: true, showStamp: true, voteError: '' });
+  setTimeout(() => setState({ showStamp: false }), 1400);
+}
+
+// ---------- admin auth ----------
+async function adminSignIn(){
+  try {
+    await signInWithEmailAndPassword(auth, (state.adminEmail || '').trim(), state.adminPasswordInput || '');
+    setState({ adminError: '', adminPasswordInput: '', view: 'admin' });
+  } catch(e){
+    setState({ adminError: 'Could not sign in. Check the email and password.' });
+  }
+}
+async function adminSignOut(){ await signOut(auth); setState({ view: 'landing' }); }
+
+// ---------- admin: positions & candidates ----------
+async function addPosition(){
+  if (!state.newPosName.trim()) return;
+  const cfg = JSON.parse(JSON.stringify(state.election || { title: 'Student council election', positions: [] }));
+  cfg.positions.push({ id: 'p' + Date.now(), name: state.newPosName.trim(), candidates: [] });
+  await saveElection(cfg);
+  setState({ election: cfg, newPosName: '' });
+}
+async function removePosition(posId){
+  const cfg = JSON.parse(JSON.stringify(state.election));
+  cfg.positions = cfg.positions.filter(p => p.id !== posId);
+  await saveElection(cfg);
+  setState({ election: cfg });
+}
+async function addCandidate(posId){
+  const name = (state.newCandName[posId] || '').trim();
+  if (!name) return;
+  const photoUrl = (state.newCandPhoto[posId] || '').trim();
+  const cfg = JSON.parse(JSON.stringify(state.election));
+  const pos = cfg.positions.find(p => p.id === posId);
+  pos.candidates.push({ id: 'c' + Date.now(), name, photoUrl });
+  await saveElection(cfg);
+  const nc = Object.assign({}, state.newCandName); nc[posId] = '';
+  const np = Object.assign({}, state.newCandPhoto); np[posId] = '';
+  setState({ election: cfg, newCandName: nc, newCandPhoto: np });
+}
+async function removeCandidate(posId, candId){
+  const cfg = JSON.parse(JSON.stringify(state.election));
+  const pos = cfg.positions.find(p => p.id === posId);
+  pos.candidates = pos.candidates.filter(c => c.id !== candId);
+  await saveElection(cfg);
+  setState({ election: cfg });
+}
+
+function initials(name){ return name.trim().split(/\s+/).slice(0,2).map(w => w[0] ? w[0].toUpperCase() : '').join(''); }
+function fileToCompressedDataUrl(file){
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const img = new Image();
+      img.onload = () => {
+        const maxDim = 200;
+        let w = img.width, h = img.height;
+        if (w > h) { if (w > maxDim) { h = Math.round(h * maxDim / w); w = maxDim; } }
+        else { if (h > maxDim) { w = Math.round(w * maxDim / h); h = maxDim; } }
+        const canvas = document.createElement('canvas');
+        canvas.width = w; canvas.height = h;
+        canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+        resolve(canvas.toDataURL('image/jpeg', 0.75));
+      };
+      img.onerror = () => reject(new Error('Could not read that image.'));
+      img.src = e.target.result;
+    };
+    reader.onerror = () => reject(new Error('Could not read that file.'));
+    reader.readAsDataURL(file);
+  });
+}
+function photoOrPlaceholder(cand, sizeClass){
+  const cls = sizeClass ? ' ' + sizeClass : '';
+  return cand.photoUrl
+    ? `<img class="cand-photo${cls}" src="${cand.photoUrl}" alt="${cand.name}" onerror="this.outerHTML='<div class=&quot;cand-photo-placeholder${cls}&quot;>${initials(cand.name)}</div>';"/>`
+    : `<div class="cand-photo-placeholder${cls}">${initials(cand.name)}</div>`;
+}
+
+// ---------- admin: roster ----------
+async function addRosterEntry(){
+  const id = (state.rosterNewId || '').trim().toLowerCase();
+  const name = (state.rosterNewName || '').trim();
+  const pass = (state.rosterNewPass || '').trim();
+  if (!id || !name || !pass){ setState({ rosterError: 'Enter a student ID, name, and password.' }); return; }
+  await setDoc(doc(db, 'roster', id), { name, passwordHash: await hashPassword(pass) });
+  const roster = await loadRosterList();
+  setState({ roster, rosterNewId: '', rosterNewName: '', rosterNewPass: '', rosterError: '', rosterMsg: `Added ${name}.` });
+}
+async function removeRosterEntry(id){
+  await deleteDoc(doc(db, 'roster', id));
+  const roster = await loadRosterList();
+  setState({ roster });
+}
+async function importRosterCsv(text){
+  const lines = text.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
+  let count = 0;
+  for (const line of lines){
+    const parts = line.split(',').map(p => p.trim().replace(/^"|"$/g, ''));
+    if (parts.length < 3) continue;
+    const [idRaw, name, pass] = parts;
+    if (/^id$/i.test(idRaw)) continue;
+    const id = idRaw.toLowerCase();
+    if (!id || !name || !pass) continue;
+    await setDoc(doc(db, 'roster', id), { name, passwordHash: await hashPassword(pass) });
+    count++;
+  }
+  const roster = await loadRosterList();
+  setState({ roster, rosterMsg: `Imported ${count} voter${count===1?'':'s'}.`, rosterError: count ? '' : 'No valid rows found. Use one voter per line: ID,Name,Password.' });
+}
+
+// ---------- render ----------
+function topbar(label){
+  return `<div class="topbar">
+    <div class="seal">★</div>
+    <div>
+      <div class="eyebrow" style="color:#C9C2A8;">${label}</div>
+      <h2 style="color:var(--cream);font-size:19px;">${(state.election && state.election.title) || 'Student council election'}</h2>
+    </div>
+  </div>`;
+}
+
+function render(){
+  if (state.view === 'loading'){ root.innerHTML = `<div class="empty">Loading ballot...</div>`; return; }
+
+  if (state.view === 'landing'){
+    root.innerHTML = `
+      ${topbar('Official ballot')}
+      <div class="body-pad" style="text-align:center;padding:48px 28px;">
+        <div class="eyebrow">Cast your vote</div>
+        <h1 style="font-size:28px;margin:10px 0 8px;">Who's it going to be?</h1>
+        <p style="color:var(--ink-soft);max-width:380px;margin:0 auto 28px;">One vote per student, verified by student ID. Results tally live for the election admin.</p>
+        <div style="display:flex;gap:12px;justify-content:center;">
+          <button class="primary" id="btn-vote">Vote now</button>
+          <button class="ghost" id="btn-admin">Election admin</button>
+        </div>
+      </div>`;
+    document.getElementById('btn-vote').onclick = () => setState({ view: 'vote' });
+    document.getElementById('btn-admin').onclick = () => setState({ view: state.adminUser ? 'admin' : 'admin-login' });
+    return;
+  }
+
+  if (state.view === 'admin-login'){
+    root.innerHTML = `
+      ${topbar('Admin access')}
+      <div class="body-pad">
+        <div class="card">
+          <h3 style="margin-bottom:6px;">Admin sign in</h3>
+          <p style="color:var(--ink-soft);font-size:13px;margin:0 0 16px;">Sign in with the admin account created in Firebase.</p>
+          ${state.adminError ? `<div class="error-box" style="max-width:none;margin:0 0 12px;">${state.adminError}</div>` : ''}
+          <div style="display:flex;flex-direction:column;gap:10px;">
+            <input id="admin-email" placeholder="Email" value="${state.adminEmail}"/>
+            <input type="password" id="admin-password" placeholder="Password" value="${state.adminPasswordInput}"/>
+          </div>
+          <div style="display:flex;gap:10px;margin-top:14px;">
+            <button class="primary" id="admin-go" style="flex:1;">Sign in</button>
+            <button class="ghost" id="admin-back">Back</button>
+          </div>
+        </div>
+      </div>`;
+    document.getElementById('admin-email').oninput = (e) => state.adminEmail = e.target.value;
+    document.getElementById('admin-password').oninput = (e) => state.adminPasswordInput = e.target.value;
+    document.getElementById('admin-go').onclick = adminSignIn;
+    document.getElementById('admin-back').onclick = () => setState({ view: 'landing', adminError: '' });
+    return;
+  }
+
+  if (!state.adminUser && state.view.startsWith('admin') && state.view !== 'admin-login'){
+    setState({ view: 'admin-login' }); return;
+  }
+
+  if (state.view === 'admin'){
+    root.innerHTML = `
+      ${topbar('Admin dashboard')}
+      <div class="body-pad">
+        <div style="display:flex;gap:10px;margin-bottom:20px;flex-wrap:wrap;">
+          <button class="ghost" id="tab-setup">Set up positions</button>
+          <button class="ghost" id="tab-roster">Voter roster</button>
+          <button class="ghost" id="tab-results">Live results</button>
+          <button class="ghost" id="tab-back">Back to ballot</button>
+          <button class="ghost" id="tab-signout">Sign out</button>
+        </div>
+        <p style="color:var(--ink-soft);">Choose a tab above to set up positions and candidates, upload your voter roster, or watch results come in live.</p>
+      </div>`;
+    document.getElementById('tab-setup').onclick = () => setState({ view: 'admin-setup' });
+    document.getElementById('tab-roster').onclick = async () => { const roster = await loadRosterList(); setState({ roster, view: 'admin-roster' }); };
+    document.getElementById('tab-results').onclick = async () => { const votes = await computeTally(); setState({ votes, view: 'admin-results' }); };
+    document.getElementById('tab-back').onclick = () => setState({ view: 'landing' });
+    document.getElementById('tab-signout').onclick = adminSignOut;
+    return;
+  }
+
+  if (state.view === 'admin-setup'){
+    const cfg = state.election || { title: 'Student council election', positions: [] };
+    root.innerHTML = `
+      ${topbar('Set up positions')}
+      <div class="body-pad wide">
+        <button class="ghost" id="tab-back" style="margin-bottom:18px;">&larr; Back to dashboard</button>
+        <div class="card" style="max-width:none;">
+          <div style="display:flex;gap:10px;">
+            <input id="pos-name" placeholder="Position name, e.g. President" value="${state.newPosName}"/>
+            <button class="primary" id="add-pos">Add position</button>
+          </div>
+        </div>
+        <div id="positions-list"></div>
+      </div>`;
+    document.getElementById('tab-back').onclick = () => setState({ view: 'admin' });
+    document.getElementById('pos-name').oninput = (e) => state.newPosName = e.target.value;
+    document.getElementById('add-pos').onclick = addPosition;
+
+    const listEl = document.getElementById('positions-list');
+    if (!cfg.positions.length){
+      listEl.innerHTML = `<div class="empty">No positions yet. Add one above to get started.</div>`;
+    } else {
+      listEl.innerHTML = cfg.positions.map(pos => `
+        <div class="card" style="max-width:none;">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
+            <h3 style="font-size:17px;">${pos.name}</h3>
+            <button class="ghost" data-remove-pos="${pos.id}" style="padding:6px 12px;font-size:12px;">Remove position</button>
+          </div>
+          ${pos.candidates.map(c => `
+            <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;padding:8px 0;border-top:1px solid var(--line);">
+              <div style="display:flex;align-items:center;gap:10px;">${photoOrPlaceholder(c)}<span>${c.name}</span></div>
+              <button class="ghost" data-remove-cand="${pos.id}|${c.id}" style="padding:4px 10px;font-size:12px;">Remove</button>
+            </div>`).join('')}
+          <div style="display:flex;gap:10px;margin-top:12px;flex-wrap:wrap;align-items:center;">
+            <input data-cand-input="${pos.id}" placeholder="Candidate name" value="${state.newCandName[pos.id] || ''}" style="flex:1;min-width:140px;"/>
+            ${state.newCandPhoto[pos.id] ? photoOrPlaceholder({ name: state.newCandName[pos.id] || '?', photoUrl: state.newCandPhoto[pos.id] }) : ''}
+            <label class="ghost" style="display:inline-flex;align-items:center;padding:10px 14px;border:1.5px solid var(--line);border-radius:6px;font-size:13px;cursor:pointer;">
+              Choose photo
+              <input type="file" accept="image/*" data-cand-file="${pos.id}" style="display:none;"/>
+            </label>
+            <button class="ghost" data-add-cand="${pos.id}">Add</button>
+          </div>
+          <div style="margin-top:8px;"><input data-cand-photo-url="${pos.id}" placeholder="Or paste an image URL instead" style="font-size:12px;"/></div>
+        </div>`).join('');
+      listEl.querySelectorAll('[data-remove-pos]').forEach(b => b.onclick = () => removePosition(b.dataset.removePos));
+      listEl.querySelectorAll('[data-remove-cand]').forEach(b => b.onclick = () => { const [p,c] = b.dataset.removeCand.split('|'); removeCandidate(p,c); });
+      listEl.querySelectorAll('[data-cand-input]').forEach(inp => inp.oninput = (e) => { state.newCandName[inp.dataset.candInput] = e.target.value; });
+      listEl.querySelectorAll('[data-cand-photo-url]').forEach(inp => inp.oninput = (e) => { state.newCandPhoto[inp.dataset.candPhotoUrl] = e.target.value; });
+      listEl.querySelectorAll('[data-cand-file]').forEach(inp => inp.onchange = async (e) => {
+        const file = e.target.files[0]; if (!file) return;
+        const posId = inp.dataset.candFile;
+        try { state.newCandPhoto[posId] = await fileToCompressedDataUrl(file); setState({}); }
+        catch(err){ setState({ adminError: err.message }); }
+      });
+      listEl.querySelectorAll('[data-add-cand]').forEach(b => b.onclick = () => addCandidate(b.dataset.addCand));
+    }
+    return;
+  }
+
+  if (state.view === 'admin-roster'){
+    const roster = state.roster || {};
+    const ids = Object.keys(roster).sort();
+    root.innerHTML = `
+      ${topbar('Voter roster')}
+      <div class="body-pad wide">
+        <button class="ghost" id="tab-back" style="margin-bottom:18px;">&larr; Back to dashboard</button>
+        <div class="card" style="max-width:none;">
+          <div class="eyebrow" style="margin-bottom:10px;">Upload a roster</div>
+          <p style="color:var(--ink-soft);font-size:13px;margin:0 0 12px;">CSV, one voter per line: <span class="mono">student id, full name, password</span>. Existing IDs get overwritten.</p>
+          <label class="ghost" style="display:inline-flex;align-items:center;padding:10px 14px;border:1.5px solid var(--line);border-radius:6px;font-size:13px;cursor:pointer;margin-bottom:12px;">
+            Choose CSV file
+            <input type="file" accept=".csv,text/csv,text/plain" id="roster-file" style="display:none;"/>
+          </label>
+          <p style="color:var(--ink-soft);font-size:12px;margin:0 0 6px;">Or paste it directly:</p>
+          <textarea id="roster-paste" rows="4" placeholder="12345,Jamie Rivera,horse22" style="width:100%;font-family:'IBM Plex Mono',monospace;font-size:12px;"></textarea>
+          <button class="primary" id="roster-import" style="margin-top:10px;">Import</button>
+          ${state.rosterMsg ? `<p style="color:var(--ink-soft);font-size:12px;margin-top:8px;">${state.rosterMsg}</p>` : ''}
+        </div>
+        ${state.rosterError ? `<div class="error-box" style="max-width:none;">${state.rosterError}</div>` : ''}
+        <div class="card" style="max-width:none;">
+          <div class="eyebrow" style="margin-bottom:10px;">Add one voter</div>
+          <div style="display:flex;gap:10px;flex-wrap:wrap;">
+            <input id="roster-id" placeholder="Student ID" value="${state.rosterNewId}" style="flex:1;min-width:110px;"/>
+            <input id="roster-name" placeholder="Full name" value="${state.rosterNewName}" style="flex:1;min-width:110px;"/>
+            <input id="roster-pass" placeholder="Password" value="${state.rosterNewPass}" style="flex:1;min-width:110px;"/>
+            <button class="ghost" id="roster-add">Add</button>
+          </div>
+        </div>
+        <div class="eyebrow" style="margin-bottom:10px;">${ids.length} voter${ids.length===1?'':'s'} on the roster</div>
+        <div id="roster-list"></div>
+      </div>`;
+    document.getElementById('tab-back').onclick = () => setState({ view: 'admin' });
+    document.getElementById('roster-id').oninput = (e) => state.rosterNewId = e.target.value;
+    document.getElementById('roster-name').oninput = (e) => state.rosterNewName = e.target.value;
+    document.getElementById('roster-pass').oninput = (e) => state.rosterNewPass = e.target.value;
+    document.getElementById('roster-add').onclick = addRosterEntry;
+    document.getElementById('roster-paste').oninput = (e) => { state._rosterPasteText = e.target.value; };
+    document.getElementById('roster-import').onclick = () => importRosterCsv(state._rosterPasteText || document.getElementById('roster-paste').value);
+    document.getElementById('roster-file').onchange = (e) => {
+      const file = e.target.files[0]; if (!file) return;
+      const reader = new FileReader();
+      reader.onload = (ev) => importRosterCsv(ev.target.result);
+      reader.readAsText(file);
+    };
+    const listEl = document.getElementById('roster-list');
+    if (!ids.length){
+      listEl.innerHTML = `<div class="empty">No voters uploaded yet. Import a CSV or add someone above.</div>`;
+    } else {
+      listEl.innerHTML = ids.map(id => `
+        <div style="display:flex;justify-content:space-between;align-items:center;padding:10px 0;border-top:1px solid var(--line);">
+          <span><span class="mono" style="color:var(--ink-soft);font-size:12px;">${id}</span> &nbsp; ${roster[id].name}</span>
+          <button class="ghost" data-remove-voter="${id}" style="padding:4px 10px;font-size:12px;">Remove</button>
+        </div>`).join('');
+      listEl.querySelectorAll('[data-remove-voter]').forEach(b => b.onclick = () => removeRosterEntry(b.dataset.removeVoter));
+    }
+    return;
+  }
+
+  if (state.view === 'admin-results'){
+    const cfg = state.election || { positions: [] };
+    const votes = state.votes || {};
+    root.innerHTML = `
+      ${topbar('Live results')}
+      <div class="body-pad wide">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:18px;">
+          <button class="ghost" id="tab-back">&larr; Back to dashboard</button>
+          <button class="ghost" id="refresh">Refresh</button>
+        </div>
+        <div id="results-list"></div>
+      </div>`;
+    document.getElementById('tab-back').onclick = () => setState({ view: 'admin' });
+    document.getElementById('refresh').onclick = async () => { const votes = await computeTally(); setState({ votes }); };
+    const listEl = document.getElementById('results-list');
+    if (!cfg.positions.length){
+      listEl.innerHTML = `<div class="empty">No positions set up yet.</div>`;
+    } else {
+      listEl.innerHTML = cfg.positions.map(pos => {
+        const posVotes = votes[pos.id] || {};
+        const total = Object.values(posVotes).reduce((a,b) => a+b, 0);
+        const maxV = Math.max(0, ...Object.values(posVotes));
+        return `<div class="card" style="max-width:none;">
+          <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:14px;">
+            <h3 style="font-size:16px;">${pos.name}</h3>
+            <span class="mono" style="font-size:12px;color:var(--ink-soft);">${total} vote${total===1?'':'s'}</span>
+          </div>
+          ${pos.candidates.length ? pos.candidates.map(c => {
+            const v = posVotes[c.id] || 0;
+            const pct = total ? Math.round((v/total)*100) : 0;
+            const isLeader = maxV > 0 && v === maxV;
+            return `<div class="bar-row">
+              <div style="width:112px;display:flex;align-items:center;gap:6px;flex-shrink:0;overflow:hidden;">
+                ${photoOrPlaceholder(c, 'sm')}
+                <span style="font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${c.name}</span>
+              </div>
+              <div class="bar-track"><div class="bar-fill ${isLeader?'leader':''}" style="width:${pct}%;"></div></div>
+              <span class="mono" style="width:52px;text-align:right;font-size:12px;flex-shrink:0;">${v} (${pct}%)</span>
+            </div>`;
+          }).join('') : `<p style="color:var(--ink-soft);font-size:13px;">No candidates added for this position.</p>`}
+        </div>`;
+      }).join('');
+    }
+    return;
+  }
+
+  if (state.view === 'vote'){
+    const cfg = state.election;
+    if (!cfg || !cfg.positions.length){
+      root.innerHTML = `${topbar('Official ballot')}
+        <div class="body-pad">
+          <button class="ghost" id="back" style="margin-bottom:16px;">&larr; Back</button>
+          <div class="empty">The ballot isn't set up yet. Ask your election admin to add positions and candidates.</div>
+        </div>`;
+      document.getElementById('back').onclick = () => setState({ view: 'landing' });
+      return;
+    }
+    if (state.alreadyVoted){
+      root.innerHTML = `${topbar('Official ballot')}
+        <div class="body-pad" style="text-align:center;padding:48px 20px;">
+          <h2 style="font-size:24px;margin-bottom:10px;">Thanks for voting, ${state.voterName.split(' ')[0]}.</h2>
+          <p style="color:var(--ink-soft);">Your ballot has been recorded. Results update live for the election admin.</p>
+          <button class="ghost" id="done" style="margin-top:22px;">Done</button>
+        </div>
+        <div class="stamp ${state.showStamp ? 'show' : ''}">VOTED</div>`;
+      document.getElementById('done').onclick = () => setState({ view: 'landing', voterId: '', voterName: '', voterPassword: '', voterAuthenticated: false, selections: {}, alreadyVoted: false });
+      return;
+    }
+    root.innerHTML = `
+      ${topbar('Official ballot')}
+      <div class="body-pad" style="max-width:480px;margin:0 auto;">
+        <button class="ghost" id="back" style="margin-bottom:16px;">&larr; Back</button>
+        ${state.voteError ? `<div class="error-box" style="max-width:none;">${state.voteError}</div>` : ''}
+        ${!state.voterAuthenticated ? `
+          <div class="card" style="max-width:none;">
+            <div class="eyebrow" style="margin-bottom:10px;">Verify your identity</div>
+            <div style="display:flex;flex-direction:column;gap:10px;">
+              <input id="voter-id" placeholder="Student ID" value="${state.voterId}"/>
+              <input id="voter-password" type="password" placeholder="Password" value="${state.voterPassword}"/>
+            </div>
+            <button class="primary" id="verify-voter" style="width:100%;margin-top:14px;">Continue</button>
+          </div>` : `
+          <div class="card" style="max-width:none;">
+            <div class="eyebrow">Voting as</div>
+            <p style="font-size:16px;margin:6px 0 0;">${state.voterName}</p>
+          </div>
+          <div id="positions-vote"></div>
+          <button class="primary" id="submit-vote" style="width:100%;margin-top:8px;">Submit ballot</button>`}
+      </div>`;
+    document.getElementById('back').onclick = () => setState({ view: 'landing', voteError: '' });
+    if (!state.voterAuthenticated){
+      document.getElementById('voter-id').oninput = (e) => state.voterId = e.target.value;
+      document.getElementById('voter-password').oninput = (e) => state.voterPassword = e.target.value;
+      document.getElementById('verify-voter').onclick = verifyVoter;
+      return;
+    }
+    document.getElementById('submit-vote').onclick = submitVote;
+    const posEl = document.getElementById('positions-vote');
+    posEl.innerHTML = cfg.positions.map(pos => `
+      <div class="card" style="max-width:none;">
+        <div class="eyebrow" style="margin-bottom:10px;">${pos.name}</div>
+        ${pos.candidates.length ? pos.candidates.map(c => `
+          <label style="display:flex;align-items:center;gap:10px;padding:9px 0;cursor:pointer;border-top:1px solid var(--line);">
+            <input type="radio" name="pos-${pos.id}" value="${c.id}" ${state.selections[pos.id]===c.id?'checked':''} style="width:16px;height:16px;flex-shrink:0;"/>
+            ${photoOrPlaceholder(c)}<span>${c.name}</span>
+          </label>`).join('') : `<p style="color:var(--ink-soft);font-size:13px;">No candidates for this position.</p>`}
+      </div>`).join('');
+    posEl.querySelectorAll('input[type=radio]').forEach(r => r.onchange = (e) => {
+      const posId = e.target.name.replace('pos-','');
+      const sel = Object.assign({}, state.selections); sel[posId] = e.target.value;
+      state.selections = sel;
+    });
+    return;
+  }
+}
+
+loadElection();
+</script>
+</body>
+</html>
